@@ -1,1 +1,5 @@
 *.exe
+*.txt
+STL2PRINT/
+C++Test
+ESP32tests
