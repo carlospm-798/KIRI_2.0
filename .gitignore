@@ -1,6 +1,4 @@
 *.exe
 STL2PRINT/
 *.txt
-C++Test/
 TCP_IPtest/
-ESP32test/
