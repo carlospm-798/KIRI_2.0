@@ -78,8 +78,6 @@ void loop() {
                 String angleMessage = "E0: ";
                 angleMessage += String(angle, 2); // 2 decimales
                 client.println(angleMessage);
-
-                delay(500); // Actualización cada 500 ms
             }
         }
 

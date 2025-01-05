@@ -1,15 +1,18 @@
 #include <stdio.h>          // Librería de entrada/salida
 #include <winsock2.h>       // Librería de sockets y red
 #include <string.h>         // Librería de cadenas
+#include <windows.h>        // Librería para controlar el tiempo y la pantalla
 
 #pragma comment(lib, "ws2_32.lib") // Enlace con la librería Winsock
 
 #define PORT 12345            // Puerto del servidor ESP32
 #define ESP32_IP "192.168.0.192" // Dirección IP fija del ESP32
 
-void connect_to_esp32(SOCKET* sock, struct sockaddr_in* server) {
+// Variable global estática para almacenar el valor anterior
+static char previous_buffer[1024] = {0}; // Buffer para el valor anterior
+
+void connect_to_esp32(SOCKET* sock, struct sockaddr_in* server, const char* message) {
     char buffer[1024] = {0}; // Buffer para almacenar respuesta
-    char message[] = "READ\n"; // Mensaje "READ" que se enviará al ESP32
 
     // Conectar al servidor
     if (connect(*sock, (struct sockaddr*)server, sizeof(*server)) < 0) {
@@ -18,7 +21,7 @@ void connect_to_esp32(SOCKET* sock, struct sockaddr_in* server) {
     }
     printf("Conectado al servidor.\n");
 
-    // Enviar el comando "READ" al ESP32
+    // Enviar el mensaje al ESP32
     if (send(*sock, message, strlen(message), 0) < 0) {
         printf("Error enviando datos. Código: %d\n", WSAGetLastError());
         return;
@@ -34,6 +37,53 @@ void connect_to_esp32(SOCKET* sock, struct sockaddr_in* server) {
         printf("Error recibiendo respuesta. Código: %d\n", WSAGetLastError());
     }
 }
+
+// Función para leer datos continuamente
+void read_continuous_data(SOCKET* sock, struct sockaddr_in* server) {
+    char buffer[1024] = {0};
+    char message[] = "START\n"; // Mensaje para empezar a recibir datos continuamente
+    DWORD start_time = GetTickCount(); // Hora de inicio de la lectura
+
+    // Conectar al servidor
+    if (connect(*sock, (struct sockaddr*)server, sizeof(*server)) < 0) {
+        printf("Error conectando al servidor. Código: %d\n", WSAGetLastError());
+        return;
+    }
+    printf("Conectado al servidor para lectura continua.\n");
+
+    // Enviar el comando "START" al ESP32
+    if (send(*sock, message, strlen(message), 0) < 0) {
+        printf("Error enviando datos. Código: %d\n", WSAGetLastError());
+        return;
+    }
+
+    while (GetTickCount() - start_time < 10000) { // 5000 ms = 5 segundos
+        // Leer la respuesta del ESP32
+        int valread = recv(*sock, buffer, sizeof(buffer) - 1, 0);
+        if (valread > 0) {
+            buffer[valread] = '\0'; // Asegurar que el buffer sea una cadena válida
+
+            //system("cls");
+            printf("Pos: %s", buffer);
+
+            // Llamar a la función para imprimir los nuevos datos si es diferente al anterior
+            /*if (buffer != previous_buffer) { // Si son diferentes
+                // Limpiar la pantalla
+                system("cls");
+                // Imprimir el nuevo dato
+                printf("Respuesta recibida: %s\n", buffer);
+                // Actualizar el valor anterior con el nuevo dato
+                strcpy(previous_buffer, buffer);
+            }*/
+
+        } else {
+            printf("Error recibiendo respuesta. Código: %d\n", WSAGetLastError());
+        }
+    }
+
+    printf("\n\nLectura continua completada.\n");
+}
+
 
 int main(void) {
     WSADATA wsa;
@@ -55,8 +105,9 @@ int main(void) {
     while (1) {
         printf("\nOpciones:\n");
         printf("1. Conectar al ESP32 y leer un valor\n");
-        printf("2. Cerrar el programa\n");
-        printf("Elige una opción: ");
+        printf("2. Conectar al ESP32 y leer datos continuamente por 10 segundos\n");
+        printf("3. Cerrar el programa\n");
+        printf(": ");
         scanf("%d", &option);
 
         if (option == 1) {
@@ -68,10 +119,22 @@ int main(void) {
             }
 
             // Llamar a la función para conectar y leer un valor del ESP32
-            connect_to_esp32(&sock, &server);
+            connect_to_esp32(&sock, &server, "READ\n");
             closesocket(sock);
 
         } else if (option == 2) {
+            sock = socket(AF_INET, SOCK_STREAM, 0);
+            if (sock == INVALID_SOCKET) {
+                printf("Error creando socket. Código: %d\n", WSAGetLastError());
+                WSACleanup();
+                return 1;
+            }
+
+            // Llamar a la función para lectura continua
+            read_continuous_data(&sock, &server);
+            closesocket(sock);
+
+        } else if (option == 3) {
             WSACleanup();
             printf("Conexión cerrada. Programa terminado.\n");
             break;
