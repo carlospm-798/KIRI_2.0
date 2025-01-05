@@ -9,61 +9,29 @@
 
 void connect_to_esp32(SOCKET* sock, struct sockaddr_in* server) {
     char buffer[1024] = {0}; // Buffer para almacenar respuesta
-    char message = 'A';      // Mensaje inicial al servidor
+    char message[] = "READ\n"; // Mensaje "READ" que se enviará al ESP32
 
+    // Conectar al servidor
     if (connect(*sock, (struct sockaddr*)server, sizeof(*server)) < 0) {
         printf("Error conectando al servidor. Código: %d\n", WSAGetLastError());
         return;
     }
     printf("Conectado al servidor.\n");
 
-    if (send(*sock, &message, sizeof(message), 0) < 0) {
+    // Enviar el comando "READ" al ESP32
+    if (send(*sock, message, strlen(message), 0) < 0) {
         printf("Error enviando datos. Código: %d\n", WSAGetLastError());
         return;
     }
-    printf("Mensaje enviado: %c\n", message);
+    printf("Mensaje enviado: %s", message);
 
-    int valread = recv(*sock, buffer, sizeof(buffer), 0);
+    // Leer la respuesta del ESP32
+    int valread = recv(*sock, buffer, sizeof(buffer) - 1, 0);
     if (valread > 0) {
-        buffer[valread] = 0;
+        buffer[valread] = '\0'; // Asegurar que el buffer sea una cadena válida
         printf("Respuesta recibida: %s\n", buffer);
     } else {
         printf("Error recibiendo respuesta. Código: %d\n", WSAGetLastError());
-    }
-}
-
-void view_position(SOCKET* sock, struct sockaddr_in* server) {
-    char buffer[1024] = {0};
-    char stopCommand[] = "STOP\n";
-
-    if (connect(*sock, (struct sockaddr*)server, sizeof(*server)) < 0) {
-        printf("Error conectando al servidor. Código: %d\n", WSAGetLastError());
-        return;
-    }
-    printf("Conectado al servidor. Mostrando posición en tiempo real...\n");
-
-    while (1) {
-        // Limpiar pantalla
-        system("cls");
-
-        // Leer datos del servidor
-        int valread = recv(*sock, buffer, sizeof(buffer), 0);
-        if (valread > 0) {
-            buffer[valread] = 0;
-            printf("Posición: %s\n", buffer);
-        } else {
-            printf("Error recibiendo datos. Código: %d\n", WSAGetLastError());
-            break;
-        }
-
-        // Verificar si el usuario quiere salir del menú
-        printf("\nPresiona 's' para salir.\n");
-        if (getchar() == 's') {
-            // Enviar comando STOP al servidor
-            send(*sock, stopCommand, strlen(stopCommand), 0);
-            printf("Saliendo del menú...\n");
-            break;
-        }
     }
 }
 
@@ -73,6 +41,7 @@ int main(void) {
     struct sockaddr_in server;
     int option;
 
+    // Inicializar Winsock
     if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
         printf("Error inicializando Winsock. Código: %d\n", WSAGetLastError());
         return 1;
@@ -85,9 +54,8 @@ int main(void) {
 
     while (1) {
         printf("\nOpciones:\n");
-        printf("1. Conectar al ESP32 y recibir datos\n");
-        printf("2. Ver posición del eslabón en tiempo real\n");
-        printf("3. Cerrar el programa\n");
+        printf("1. Conectar al ESP32 y leer un valor\n");
+        printf("2. Cerrar el programa\n");
         printf("Elige una opción: ");
         scanf("%d", &option);
 
@@ -99,22 +67,11 @@ int main(void) {
                 return 1;
             }
 
+            // Llamar a la función para conectar y leer un valor del ESP32
             connect_to_esp32(&sock, &server);
             closesocket(sock);
 
         } else if (option == 2) {
-            sock = socket(AF_INET, SOCK_STREAM, 0);
-            if (sock == INVALID_SOCKET) {
-                printf("Error creando socket. Código: %d\n", WSAGetLastError());
-                WSACleanup();
-                return 1;
-            }
-
-            view_position(&sock, &server);
-            closesocket(sock);
-
-        } else if (option == 3) {
-            closesocket(sock);
             WSACleanup();
             printf("Conexión cerrada. Programa terminado.\n");
             break;
@@ -122,5 +79,6 @@ int main(void) {
             printf("Opción inválida, por favor elige otra.\n");
         }
     }
+
     return 0;
 }
