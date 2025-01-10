@@ -1,5 +1,5 @@
-#include <Wire.h>          // Librería para comunicación I2C
-#include <UIPEthernet.h>   // Librería para el módulo Ethernet ENC28J60
+#include <Wire.h>
+#include <UIPEthernet.h>
 
 // Configuración del servidor Ethernet
 EthernetServer server(12345);
@@ -11,16 +11,16 @@ IPAddress ip(192, 168, 0, 192);
 #define RAW_ANGLE_HIGH 0x0C
 #define RAW_ANGLE_LOW  0x0D
 
+// Variable global para el desplazamiento (offset)
+float zeroPosition = 0.0;
+
 void setup() {
-    // Iniciar Ethernet
     Ethernet.begin(mac, ip);
     server.begin();
-
-    // Iniciar I2C
     Wire.begin(21, 22); // Pines SDA = 21, SCL = 22
 }
 
-int readRawAngle() {
+float readRawAngle() {
     // Leer los registros del sensor
     Wire.beginTransmission(AS5600_ADDRESS);
     Wire.write(RAW_ANGLE_HIGH);
@@ -31,56 +31,56 @@ int readRawAngle() {
     int lowByte = Wire.read();
     int rawAngle = (highByte << 8) | lowByte;
 
-    return rawAngle;
+    // Convertir el valor crudo a un ángulo en grados
+    return (rawAngle / 4095.0) * 360.0;
 }
 
-float calculateAngle(int rawAngle) {
-    // Convertir el valor crudo a un ángulo flotante en grados
-    return (rawAngle * 360.0f) / 4096.0f;
+float readCalibratedAngle() {
+    // Leer el ángulo crudo y restar la posición inicial
+    float angle = readRawAngle() - zeroPosition;
+
+    // Normalizar el ángulo al rango de 0° a 360°
+    if (angle < 0) angle += 360.0;
+    if (angle >= 360) angle -= 360.0;
+
+    return angle;
+}
+
+void resetPosition() {
+    zeroPosition = readRawAngle();  // Establecer la posición actual como el nuevo 0°
 }
 
 void loop() {
     EthernetClient client = server.available();
 
     if (client) {
-        bool sendData = false; // Controla si estamos en modo continuo
-
         while (client.connected()) {
             if (client.available()) {
-                // Leer mensaje del cliente
                 String message = client.readStringUntil('\n');
                 message.trim();
 
-                if (message.equals("READ")) {
-                    // Leer y enviar un solo dato
-                    int rawAngle = readRawAngle();
-                    float angle = calculateAngle(rawAngle);
-
-                    String angleMessage = "E0: ";
-                    angleMessage += String(angle, 2); // 2 decimales
-                    client.println(angleMessage);
-
+                if (message.equals("RESET")) {
+                    // Establecer la posición actual como 0°
+                    resetPosition();
+                    client.println("Position reset to 0.0");
+                } else if (message.equals("READ")) {
+                    // Enviar una única lectura
+                    float angle = readCalibratedAngle();
+                    client.println(angle, 2); // 2 decimales de precisión
                 } else if (message.equals("START")) {
-                    // Activar modo continuo
-                    sendData = true;
-
-                } else if (message.equals("STOP")) {
-                    // Desactivar modo continuo
-                    sendData = false;
+                    // Enviar lecturas continuamente
+                    while (client.connected()) {
+                        float angle = readCalibratedAngle();
+                        client.println(angle, 2);
+                        if (client.available()) {
+                            String stopMessage = client.readStringUntil('\n');
+                            stopMessage.trim();
+                            if (stopMessage.equals("STOP")) break;
+                        }
+                    }
                 }
             }
-
-            if (sendData) {
-                // Enviar datos continuamente
-                int rawAngle = readRawAngle();
-                float angle = calculateAngle(rawAngle);
-
-                String angleMessage = "E0: ";
-                angleMessage += String(angle, 2); // 2 decimales
-                client.println(angleMessage);
-            }
         }
-
-        client.stop(); // Finalizar conexión
+        client.stop();
     }
 }

@@ -84,6 +84,31 @@ void read_continuous_data(SOCKET* sock, struct sockaddr_in* server) {
     printf("\n\nLectura continua completada.\n");
 }
 
+void send_reset_command(SOCKET* sock, struct sockaddr_in* server) {
+    char message[] = "RESET\n";
+    char buffer[1024] = {0};
+
+    if (connect(*sock, (struct sockaddr*)server, sizeof(*server)) < 0) {
+        printf("Error conectando al servidor. Código: %d\n", WSAGetLastError());
+        return;
+    }
+    printf("Conectando al servidor para resetear la posición.\n");
+
+    if (send(*sock, message, strlen(message), 0) < 0) {
+        printf("Error enviando datos. Código: %d\n", WSAGetLastError());
+        return;
+    }
+
+    // Leer la respuesta del servidor
+    int valread = recv(*sock, buffer, sizeof(buffer) - 1, 0);
+    if (valread > 0) {
+        buffer[valread] = '\0';
+        printf("Respuesta del servidor: %s\n", buffer);
+    } else {
+        printf("error recibiendo respuesta. Código: %d\n", WSAGetLastError());
+    }
+}
+
 
 int main(void) {
     WSADATA wsa;
@@ -106,7 +131,8 @@ int main(void) {
         printf("\nOpciones:\n");
         printf("1. Conectar al ESP32 y leer un valor\n");
         printf("2. Conectar al ESP32 y leer datos continuamente por 10 segundos\n");
-        printf("3. Cerrar el programa\n");
+        printf("3. Resetear la posición a 0\n");
+        printf("4. Cerrar el programa\n");
         printf(": ");
         scanf("%d", &option);
 
@@ -135,6 +161,16 @@ int main(void) {
             closesocket(sock);
 
         } else if (option == 3) {
+            sock = socket(AF_INET, SOCK_STREAM, 0);
+            if (sock == INVALID_SOCKET) {
+                printf("Error creando socket. Código: %d\n", WSAGetLastError());
+                WSACleanup();
+                return 1;
+            }
+            send_reset_command(&sock, &server);
+            closesocket(sock);
+
+        } else if (option == 4) {
             WSACleanup();
             printf("Conexión cerrada. Programa terminado.\n");
             break;
