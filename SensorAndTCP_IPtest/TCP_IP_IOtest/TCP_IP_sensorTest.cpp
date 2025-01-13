@@ -23,6 +23,8 @@ static char previous_buffer[1024] = {0}; // Static global variable to store the 
  * 
  * @param sock Pointer to the socket for communication with the server.
  * @param server Structure containing the IP address and port of the ESP32 server.
+ * @param message Is the command that we send to the server.
+ * @param buffer This is the message we received from the server.
  * 
  * @details
  * - The function establishes a connection to the ESP32 using the data in `server`.
@@ -52,118 +54,97 @@ static char previous_buffer[1024] = {0}; // Static global variable to store the 
  * commands like "READ\n" or "START\n".
  */
 
+
 /**
  * This function attempts to connect the socket to the ESP32
- * using the provided address and port. Sends a message to the ESP32.
- * Receives the response from the ESP32 and prints it. And Handle errors
- * in the connection, sending and receiving phases.
+ * using the provided address and port. And Handle errors
+ * in the connection.
 */
 
-void connect_to_esp32(SOCKET* sock, struct sockaddr_in* server) {
-    char buffer[1024] = {0}; // Buffer to store response
-    char message[] = "READ\n";
-
-    // Connect to server
+int connect_to_server(SOCKET* sock, struct sockaddr_in* server) {
     if (connect(*sock, (struct sockaddr*)server, sizeof(*server)) < 0) {
         printf("Error connecting to server. Code: %d\n", WSAGetLastError());
-        return;
+        return -1;
     }
-    printf("Connected to server.\n");
 
-    // Send the message to the ESP32
+    printf("Connected to server.\n");
+    return 0;
+}
+
+
+/**
+ * This function attempts to send a command to the ESP32.
+ * It handle errors in the connection, in the sending phase.
+ */
+
+int send_message(SOCKET* sock, const char* message) {
     if (send(*sock, message, strlen(message), 0) < 0) {
         printf("Error sending data. Code: %d\n", WSAGetLastError());
-        return;
+        return -1;
     }
-    printf("Message sent: %s", message);
 
-    // Read the ESP32 response
-    int valread = recv(*sock, buffer, sizeof(buffer) - 1, 0);
+    printf("Message sent: %s.\n", message);
+    return 0;
+}
+
+
+/**
+ * This function attempts to receive responses of the ESP32.
+ * It handle errors in the connection, in the receiving phase.
+ */
+
+int receive_response(SOCKET* sock, char* buffer, size_t buffer_size) {
+    int valread = recv(*sock, buffer, buffer_size - 1, 0);
     if (valread > 0) {
-        buffer[valread] = '\0'; // Ensure buffer is a valid string
+        buffer[valread] = '\0';
         printf("Response received: %s\n", buffer);
+        return valread;
     } else {
         printf("Error receiving response. Code: %d\n", WSAGetLastError());
+        return -1;
     }
 }
 
 
 /**
- * This function performs continuous reading of data sent from the
- * ESP32 for a specific period of time (10 seconds for example). Sends a message 
- * to the ESP32. Receives the response from the ESP32 and prints it. And Handle errors
- * in the connection, sending and receiving phases.
-*/
+ * This function helps us connect the different functions 
+ * depending on what we choose.
+ */
 
-void read_continuous_data(SOCKET* sock, struct sockaddr_in* server) {
+
+void perform_task(SOCKET* sock, struct sockaddr_in* server, const char* message, int continuous, int duration_ms) {
     char buffer[1024] = {0};
-    char message[] = "START\n"; // Message to start receiving data continuously
-    DWORD start_time = GetTickCount(); // Reading start time
 
-    // Connect to server
-    if (connect(*sock, (struct sockaddr*)server, sizeof(*server)) < 0) {
-        printf("Error connecting to server. Code: %d\n", WSAGetLastError());
-        return;
-    }
-    printf("Connected to server.\n");
+    if (connect_to_server(sock, server) < 0) return;
 
-    // Send the message to the ESP32
-    if (send(*sock, message, strlen(message), 0) < 0) {
-        printf("Error sending data. Code: %d\n", WSAGetLastError());
-        return;
-    }
-    printf("Message sent: %s", message);
+    if (send_message(sock, message) < 0) return;
 
-    while (GetTickCount() - start_time < 10000) { // 1000 ms = 1 second
-        // Read the ESP32 response
-        int valread = recv(*sock, buffer, sizeof(buffer) - 1, 0);
-        if (valread > 0) {
-            buffer[valread] = '\0'; // Ensure buffer is a valid string
-
-            printf("Pos: %s", buffer);
-
-        } else {
-            printf("Error receiving response. Code: %d\n", WSAGetLastError());
+    if (continuous) {
+        DWORD start_time = GetTickCount();
+        while (GetTickCount() - start_time < (DWORD)duration_ms) {
+            if (receive_response(sock, buffer, sizeof(buffer)) < 0) break;
         }
-    }
-
-    printf("\n\nContinuous reading completed.\n");
-}
-
-/**
- * This function is used to reset the sensor position to 0° degrees. Sends a message to 
- * the ESP32. Receives the response from the ESP32 and prints it. And Handle errors
- * in the connection, sending and receiving phases.
-*/
-
-void send_reset_command(SOCKET* sock, struct sockaddr_in* server) {
-    char message[] = "RESET\n";
-    char buffer[1024] = {0};
-
-    // Connect to server
-    if (connect(*sock, (struct sockaddr*)server, sizeof(*server)) < 0) {
-        printf("Error connecting to server. Code: %d\n", WSAGetLastError());
-        return;
-    }
-    printf("Connected to server.\n");
-
-    // Send the message to the ESP32
-    if (send(*sock, message, strlen(message), 0) < 0) {
-        printf("Error sending data. Code: %d\n", WSAGetLastError());
-        return;
-    }
-    printf("Message sent: %s", message);
-
-    // Read the ESP32 response
-    int valread = recv(*sock, buffer, sizeof(buffer) - 1, 0);
-    if (valread > 0) {
-        buffer[valread] = '\0'; // Ensure buffer is a valid string
-        printf("Response received: %s\n", buffer);
+        printf("\n\nContinuous reading completed.\n");
     } else {
-        printf("Error receiving response. Code: %d\n", WSAGetLastError());
+        receive_response(sock, buffer, sizeof(buffer));
     }
 }
 
+
+// Specific function to connect the server,
+void connect_to_esp32(SOCKET* sock, struct sockaddr_in* server) {
+    perform_task(sock, server, "READ\n", 0, 0);
+}
+
+// Specific function to read the server response during 1 second.
+void read_continuous_data(SOCKET* sock, struct sockaddr_in* server) {
+    perform_task(sock, server, "START\n", 1, 10000);
+}
+
+// Specific function to reset the position of the AS5600 sensor.
+void send_reset_command(SOCKET* sock, struct sockaddr_in* server) {
+    perform_task(sock, server, "RESET\n", 0, 0);
+}
 
 int main(void) {
     WSADATA wsa;
