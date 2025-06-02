@@ -24,13 +24,6 @@ public:
     uint8_t h = Wire.read(), l = Wire.read();
     return ((h << 8) | l) & 0x0FFF;
   }
-
-  void sendSensor(EthernetClient &client) {
-    uint16_t angle = readSensor();
-    client.print("E0: ");
-    client.print(angle);
-    client.print("\n");
-  }
 };
 
 SensorHandler sensor;
@@ -53,13 +46,6 @@ void loop() {
       if (cmd == '1') {
         uint16_t angle = sensor.readSensor();
         client.print(angle);
-      }
-      else if (cmd == '2') {
-        // Envío indefinido mientras el cliente esté conectado
-        while (client.connected()) {
-          sensor.sendSensor(client);
-          delay(200);
-        }
       }
       else if (cmd == '0') {
         client.stop();
