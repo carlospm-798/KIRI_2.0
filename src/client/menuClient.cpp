@@ -66,7 +66,7 @@ int main() {
 
                 cmd = "READ1\n";
                 send(menuSock, cmd.c_str(), cmd.size(), 0);
-                this_thread::sleep_for(milliseconds(10));
+                this_thread::sleep_for(milliseconds(1));
             }
         }
         else if (choice == 4) {
