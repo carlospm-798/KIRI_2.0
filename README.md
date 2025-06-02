@@ -1,4 +1,4 @@
-Homemade 6-degree-of-freedom robotic arm available for free.
+Homemade 6-degree-of-freedom robotic arm, open source project.
 
 Note that the "Main" branch is empty, as this project is progressing in my free time, 
 but you can check out the development experiments in the different branches available. 
