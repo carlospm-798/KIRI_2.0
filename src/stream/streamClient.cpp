@@ -15,11 +15,13 @@ SOCKET espSock  = INVALID_SOCKET;
 
 bool connectESP() {
     if (espSock != INVALID_SOCKET) return true;
+
     espSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     sockaddr_in eaddr = {};
     eaddr.sin_family = AF_INET;
     eaddr.sin_port   = htons(5000);
     InetPtonA(AF_INET, "192.168.0.100", &eaddr.sin_addr);
+
     if (connect(espSock, (sockaddr*)&eaddr, sizeof(eaddr)) == SOCKET_ERROR) {
         closesocket(espSock);
         espSock = INVALID_SOCKET;
@@ -44,7 +46,7 @@ void read() {
         return;
     }
     send(espSock, "1", 1, 0);
-    char buf[32] = {};
+    char buf[32];
     int ret = recv(espSock, buf, sizeof(buf)-1, 0);
     if (ret > 0) {
         buf[ret] = '\0';
@@ -78,18 +80,16 @@ int main() {
         int ret = recv(menuSock, recvBuf, sizeof(recvBuf)-1, 0);
         if (ret > 0) {
             recvBuf[ret] = '\0';
-            string cmd(recvBuf);
-            if (cmd.rfind("CONNECT",0)==0) {
-                connectESP();
-            }
-            else if (cmd.rfind("READ1",0)==0) {
-                read();
-            }
-            else if (cmd.rfind("DISCONNECT",0)==0) {
+
+            if (strncmp(recvBuf, "CONNECT", 7) == 0) connectESP();
+            else if (strncmp(recvBuf, "READ1", 5) == 0) read();
+            else if (strncmp(recvBuf, "DISCONNECT", 10) == 0) {
                 disconnectESP();
                 break;
             }
         }
+
+
         else if (ret == 0) {
             cout << "Stream: MenuClient disconnected\n";
             break;
@@ -100,7 +100,7 @@ int main() {
                 cout << "Stream: recv error " << err << "\n";
                 break;
             }
-            this_thread::sleep_for(chrono::milliseconds(50));
+            this_thread::sleep_for(50ms);
         }
     }
 

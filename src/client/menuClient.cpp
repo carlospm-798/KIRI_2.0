@@ -30,13 +30,16 @@ int main() {
     }
     cout << "Menu: Connected\n";
 
-    cout << "\n1. Connect to ESP32\n"
-            << "2. Read one value of the sensor\n"
-            << "3. Read sensor for 10 seconds\n"
-            << "4. Disconnect & Exit\n"
-            << "Select option: ";    
+    const char* menu = 
+        "\n1. Connect to ESP32\n"
+        "2. Read one value of the sensor\n"
+        "3. Read sensor for 10 seconds\n"
+        "4. Disconnect & Exit\n"
+        "Select option: ";  
 
     int choice;
+    cout << menu;
+
     while (true) {
 
         cout <<"Select option: ";
@@ -47,35 +50,30 @@ int main() {
             cout << "Menu: Invalid\n";
             continue;
         }
-        string cmd;
-        if (choice == 1) {
-            cmd = "CONNECT\n";
-            send(menuSock, cmd.c_str(), cmd.size(), 0);
-        }
-        else if (choice == 2) {
-            cmd = "READ1\n";
-            send(menuSock, cmd.c_str(), cmd.size(), 0);
-        }
+        const char* cmd = nullptr;
+
+        if (choice == 1) cmd = "CONNECT\n";
+        else if (choice == 2) cmd = "READ1\n";
         else if (choice == 3) {
-
             auto start = steady_clock::now();
-            while (true) {
-                auto now = steady_clock::now();
-                auto secs = duration_cast<seconds>(now - start).count();
-                if (secs >= 10) break;
-
-                cmd = "READ1\n";
-                send(menuSock, cmd.c_str(), cmd.size(), 0);
-                this_thread::sleep_for(milliseconds(1));
+            while (duration_cast<seconds>(steady_clock::now() - start).count() < 10) {
+                send(menuSock, "READ1\n", 6, 0);
+                this_thread::sleep_for(1ms);
             }
+            continue;
         }
+
         else if (choice == 4) {
-            send(menuSock, "DISCONNECT\n", 11, 0);
+            cmd = "DISCONNECT\n";
+            send(menuSock, cmd, 11, 0);
             break;
         }
         else {
             cout << "Menu: Invalid\n";
+            continue;
         }
+
+        if (cmd) send(menuSock, cmd, strlen(cmd), 0);
     }
 
     closesocket(menuSock);
