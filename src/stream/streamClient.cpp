@@ -76,27 +76,32 @@ float shortestAngle(float target, float current) {
 }
 
 void controlMotor(float target) {
+    
+    float Kp = 0.8f, Ki = 0.01f, Kd = 0.2f;
+    float prevError = 0, integral = 0;
+
     const float tolerance = 1.5f;
 
-    for (int tries = 0; tries < 5000; ++tries) {
+    for (int i = 0; i < 3000; ++i) {
         float current = readAngle();
-        if (current < 0) {
-            cout << "Stream: Failed to read sensor\n";
-            break;
-        }
-
         float error = shortestAngle(target, current);
+        integral += error;
+        float derivative = error - prevError;
+        prevError = error;
 
-        cout << "Current: " << current << " | Error: " << error << endl;
+        float output = Kp * error + Ki * integral + Kd * derivative;
+
+        int steps = int(round(abs(output)));
+        char dir = (output > 0) ? 'F' : 'B';
+
+        for (int j = 0; j < steps; ++j)
+            send(espSock, &dir, 1, 0);
+
+        cout << "Current: " << current << " | Error: " << error << " | Output: " << output << endl;
 
         if (abs(error) <= tolerance) break;
-
-        if (error > 0) send(espSock, "F", 1, 0);
-        else send(espSock, "B", 1, 0);
-
-        this_thread::sleep_for(1ms);
+        this_thread::sleep_for(2ms);
     }
-
 }
 
 int main() {
