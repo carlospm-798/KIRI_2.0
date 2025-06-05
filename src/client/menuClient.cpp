@@ -7,6 +7,7 @@
 #include <limits>
 #include <chrono>
 #include <thread>
+#include <algorithm>
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -34,7 +35,8 @@ int main() {
         "\n1. Connect to ESP32\n"
         "2. Read one value of the sensor\n"
         "3. Read sensor for 10 seconds\n"
-        "4. Disconnect & Exit\n"
+        "4. Move motor to angle\n"
+        "5. Disconnect & Exit\n"
         "Select option: ";  
 
     int choice;
@@ -63,7 +65,28 @@ int main() {
             continue;
         }
 
-        else if (choice == 4) {
+        else if (choice == 4){
+            string input;
+            cin >> input;
+
+            input.erase(remove_if(input.begin(), input.end(),
+                [](char c){ return !isdigit(c) && c != '.';}),
+                input.end());
+            
+            try {
+                float angle = stof(input);
+                if (angle < 0.0f || angle > 360.0f) {
+                    cout << "Angle out of range!\n";
+                    continue;
+                }
+                string cmdStr = "GOTO:" + input + "\n";
+                send(menuSock, cmdStr.c_str(), cmdStr.size(), 0);
+            } catch (error_code) {
+                cout << "Invalid number!\n";
+            }
+        }
+
+        else if (choice == 5) {
             cmd = "DISCONNECT\n";
             send(menuSock, cmd, 11, 0);
             break;

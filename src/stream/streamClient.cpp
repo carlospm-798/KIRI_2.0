@@ -6,6 +6,7 @@
 #include <string>
 #include <chrono>
 #include <thread>
+#include <cmath>
 
 #pragma comment(lib, "Ws2_32.lib")
 using namespace std;
@@ -56,6 +57,48 @@ void read() {
     }
 }
 
+float readAngle() {
+    send(espSock, "1", 1, 0);
+    char buf[16] = {};
+    int ret = recv(espSock, buf, sizeof(buf)-1, 0);
+
+    if (ret > 0) {
+        buf[ret] = '\0';
+        uint16_t raw = atoi(buf);
+        return (raw * 360.0f) / 4096.0f;
+    }
+    return -1.0f;
+}
+
+float shortestAngle(float target, float current) {
+    float delta = fmod((target - current + 540.0f), 360.0f) - 180.0f;
+    return delta;
+}
+
+void controlMotor(float target) {
+    const float tolerance = 1.5f;
+
+    for (int tries = 0; tries < 5000; ++tries) {
+        float current = readAngle();
+        if (current < 0) {
+            cout << "Stream: Failed to read sensor\n";
+            break;
+        }
+
+        float error = shortestAngle(target, current);
+
+        cout << "Current: " << current << " | Error: " << error << endl;
+
+        if (abs(error) <= tolerance) break;
+
+        if (error > 0) send(espSock, "F", 1, 0);
+        else send(espSock, "B", 1, 0);
+
+        this_thread::sleep_for(1ms);
+    }
+
+}
+
 int main() {
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2,2), &wsaData)) return 1;
@@ -75,21 +118,29 @@ int main() {
     ULONG mode = 1;
     ioctlsocket(menuSock, FIONBIO, &mode);
 
-    char recvBuf[32];
+    char recvBuf[64];
     while (true) {
         int ret = recv(menuSock, recvBuf, sizeof(recvBuf)-1, 0);
         if (ret > 0) {
             recvBuf[ret] = '\0';
+            string cmd(recvBuf);
 
-            if (strncmp(recvBuf, "CONNECT", 7) == 0) connectESP();
-            else if (strncmp(recvBuf, "READ1", 5) == 0) read();
-            else if (strncmp(recvBuf, "DISCONNECT", 10) == 0) {
+            if (cmd.rfind("GOTO:", 0) == 0) {
+                try {
+                    float target = stof(cmd.substr(5));
+                    cout << "Stream: Moving to " << target << "\xB0\n";
+                    if (connectESP()) controlMotor(target);
+                } catch (...) {
+                    cout << "Stream: Invalid GOTO format\n";
+                }
+            }
+            else if (cmd.find("CONNECT") == 0) connectESP();
+            else if (cmd.find("READ1") == 0)    read();
+            else if (cmd.find("DISCONNECT") == 0) {
                 disconnectESP();
                 break;
             }
         }
-
-
         else if (ret == 0) {
             cout << "Stream: MenuClient disconnected\n";
             break;
