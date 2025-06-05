@@ -40,7 +40,7 @@ void doStep(bool forward) {
   digitalWrite(STEP_PIN, HIGH);
   delayMicroseconds(500);
   digitalWrite(STEP_PIN, LOW);
-  delayMicroseconds(500);
+  delayMicroseconds(250);
 }
 
 void loop() {
