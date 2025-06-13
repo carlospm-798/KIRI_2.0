@@ -76,15 +76,34 @@ float shortestAngle(float target, float current) {
 }
 
 void controlMotor(float target) {
-    
+    const float tolerance = 1.5f;
+
+    float current = readAngle();
+    if (current < 0) {
+        cout << "Stream: Failed to read sensor\n";
+        return;
+    }
+
+    float delta = target - current;
+    if (delta > 180.0f) {
+        target -= 360.0f;
+        cout << "Forzando trayectoria larga (↺): nuevo target = " << target << "°\n";
+    } else if (delta < -180.0f) {
+        target += 360.0f;
+        cout << "Forzando trayectoria larga (↻): nuevo target = " << target << "°\n";
+    }
+
     float Kp = 0.8f, Ki = 0.01f, Kd = 0.2f;
     float prevError = 0, integral = 0;
 
-    const float tolerance = 1.5f;
-
     for (int i = 0; i < 3000; ++i) {
-        float current = readAngle();
-        float error = shortestAngle(target, current);
+        current = readAngle();
+
+        // Alinear current al rango del target
+        while (current < target - 180.0f) current += 360.0f;
+        while (current > target + 180.0f) current -= 360.0f;
+
+        float error = target - current;
         integral += error;
         float derivative = error - prevError;
         prevError = error;
@@ -97,12 +116,15 @@ void controlMotor(float target) {
         for (int j = 0; j < steps; ++j)
             send(espSock, &dir, 1, 0);
 
-        cout << "Current: " << current << " | Error: " << error << " | Output: " << output << endl;
+        if (i % 10 == 0)
+            cout << "Current: " << current << " | Error: " << error << " | Output: " << output << endl;
 
         if (abs(error) <= tolerance) break;
         this_thread::sleep_for(2ms);
+
     }
 }
+
 
 int main() {
     WSADATA wsaData;
