@@ -1,11 +1,14 @@
 offset = 10
-axis = 10
+axis = 15
 example = []
 
-example = [int(i) for i in range(axis+1)]
+'''example = [int(i) for i in range(axis+1)]
 example += [int(10) for i in range(5)]
 example.append(11)
 example += reversed([int(i) for i in range(axis+1)])
+print(example)'''
+
+example += reversed([int(i) for i in range(axis)])
 print(example)
 
 def getAngle(deg):
@@ -19,10 +22,15 @@ def getCorrectedAngle(deg):
         corrected -= 360
     return corrected
 
-def displayAngle(corrected, direction):
-    if corrected == 0 and direction is True:
-        return "360°"  # solo visual
-    return f"{corrected}°"
+def displayAngle(corrected, direction, turns):
+    corrected_with_turns = corrected + (turns * 360)
+
+    # Solo visualmente mostrar 360 si está en vuelta 0 y es creciente
+    if corrected == 0 and direction is True and turns == 0:
+        return "360°"
+    
+    return f"{corrected_with_turns}°"
+
 
 
 def getDirection(current, last):
@@ -48,7 +56,7 @@ def main():
 
         print(f"current:    {i},\
                 angle:      {getAngle(i)},\
-                corrected:  {displayAngle(corrected, direction)},\
+                corrected:  {displayAngle(corrected, direction, turns)},\
                 turns:      {turns},\
                 dir:        {direction}")
         last_corrected = corrected

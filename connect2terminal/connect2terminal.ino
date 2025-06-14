@@ -10,7 +10,6 @@ EthernetServer server(5000);
 // Motor pins
 #define STEP_PIN 14
 #define DIR_PIN  27
-
 #define STEP_DELAY_US 250
 
 // PID params
@@ -18,14 +17,17 @@ float Kp = 1.2f, Ki = 0.05f, Kd = 0.3f;
 float targetAngle = 0.0f;
 float speedPercent = 50.0f;
 
-int currentTurns = 0;
-float prevAngle = 0.0f;
-
 float prevError = 0.0f, integral = 0.0f;
 float prevFilteredOutput = 0.0f;
 unsigned long prevTime = 0;
 
 EthernetClient client;
+
+// Giro tracking
+float angleOffset = 0.0f;
+float lastCorrected = 0.0f;
+bool lastDirection = true; // true = rising
+int turns = 0;
 
 void setup() {
   Wire.begin(21, 22);
@@ -37,7 +39,8 @@ void setup() {
   pinMode(DIR_PIN, OUTPUT);
   digitalWrite(STEP_PIN, LOW);
 
-  prevAngle = readAS5600();
+  angleOffset = readAS5600() * 360.0f / 4096.0f;
+  lastCorrected = getCorrectedAngle();
   prevTime = micros();
 }
 
@@ -50,6 +53,20 @@ uint16_t readAS5600() {
   uint8_t high = Wire.read();
   uint8_t low  = Wire.read();
   return ((high << 8) | low) & 0x0FFF;
+}
+
+float getCorrectedAngle() {
+  float raw = readAS5600() * 360.0f / 4096.0f;
+  float corrected = raw - angleOffset;
+  if (corrected < 0) corrected += 360.0f;
+  else if (corrected >= 360.0f) corrected -= 360.0f;
+  return corrected;
+}
+
+bool getDirection(float current, float last) {
+  if (current > last) return true;
+  else if (current < last) return false;
+  return lastDirection; // sin cambio
 }
 
 void doStep(bool forward) {
@@ -76,7 +93,7 @@ void loop() {
         float target = cmd.substring(first + 1, second).toFloat();
         float speed = cmd.substring(second + 1).toFloat();
 
-        targetAngle = target; // Guardar target como ángulo puro (0° - 360°)
+        targetAngle = target;
         speedPercent = speed;
 
         // Reset PID
@@ -92,14 +109,20 @@ void loop() {
     }
   }
 
-  // PID control loop
-  float angle = readAS5600() * 360.0f / 4096.0f;
-  float delta = angle - prevAngle;
-  if (delta > 180.0f) currentTurns -= 1;
-  else if (delta < -180.0f) currentTurns += 1;
-  prevAngle = angle;
+  // Tracking de giros
+  float corrected = getCorrectedAngle();
+  bool direction = getDirection(corrected, lastCorrected);
 
-  float currentGlobal = currentTurns * 360.0f + angle;
+  if (direction && lastCorrected > 300.0f && corrected < 60.0f) {
+      turns += 1;
+  } else if (!direction && lastCorrected < 60.0f && corrected > 300.0f) {
+      turns -= 1;
+  }
+
+  lastCorrected = corrected;
+  lastDirection = direction;
+
+  float currentGlobal = corrected + (turns * 360.0f);
 
   // Calcular p mod 360
   float p_mod360 = fmod(currentGlobal, 360.0f);
@@ -140,7 +163,7 @@ void loop() {
   int steps = int(abs(filteredOutput) * dt / degPerStep);
   steps = constrain(steps, 0, 30);
 
-  if (steps > 0 || abs(error) > 0.1f) { // Tolerancia reducida a 0.1°
+  if (steps > 0 || abs(error) > 0.1f) {
     if (steps == 0) steps = 1;
     bool forward = (filteredOutput > 0);
     for (int i = 0; i < steps; ++i) {
