@@ -6,6 +6,22 @@ byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 IPAddress ip(192,168,0,100), gw(192,168,0,1), nm(255,255,255,0);
 EthernetServer server(5000);
 
+uint16_t readAS5600() {
+  Wire.beginTransmission(0x36);
+  Wire.write(0x0E);
+  if (Wire.endTransmission(false)) return 0;
+  Wire.requestFrom(0x36, 2);
+  if (Wire.available() < 2) return 0;
+  uint8_t high = Wire.read();
+  uint8_t low  = Wire.read();
+  return ((high << 8) | low) & 0x0FFF;
+}
+
+float getCorrectedAngle() {
+  float raw = readAS5600() * 360.0f / 4096.0f;
+  return raw;
+}
+
 class SensorHandler {
 private:
   const int addr = 0x36; // AS5600 I2C address
@@ -44,7 +60,7 @@ void loop() {
       char cmd = client.read();
 
       if (cmd == '1') {
-        uint16_t angle = sensor.readSensor();
+        float angle = getCorrectedAngle();
         client.print(angle);
       }
       else if (cmd == '0') {

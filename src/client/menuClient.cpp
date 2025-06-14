@@ -7,6 +7,8 @@
 #include <limits>
 #include <chrono>
 #include <thread>
+#include <atomic>
+
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -32,7 +34,7 @@ int main() {
 
     cout << "\n1. Connect to ESP32\n"
             << "2. Read one value of the sensor\n"
-            << "3. Read sensor for 10 seconds\n"
+            << "3. Read sensor until 'q'\n"
             << "4. Disconnect & Exit\n"
             << "Select option: ";    
 
@@ -57,18 +59,30 @@ int main() {
             send(menuSock, cmd.c_str(), cmd.size(), 0);
         }
         else if (choice == 3) {
+            cout << "Reading... press 'q' + Enter to stop.\n";
 
-            auto start = steady_clock::now();
-            while (true) {
-                auto now = steady_clock::now();
-                auto secs = duration_cast<seconds>(now - start).count();
-                if (secs >= 10) break;
+            std::atomic<bool> stopFlag{false};
 
+            std::thread inputThread([&stopFlag]() {
+                char c;
+                while (std::cin >> c) {
+                    if (c == 'q') {
+                        stopFlag = true;
+                        break;
+                    }
+                }
+            });
+
+            while (!stopFlag) {
                 cmd = "READ1\n";
                 send(menuSock, cmd.c_str(), cmd.size(), 0);
                 this_thread::sleep_for(milliseconds(1));
             }
+
+            if (inputThread.joinable())
+                inputThread.join();
         }
+
         else if (choice == 4) {
             send(menuSock, "DISCONNECT\n", 11, 0);
             break;
